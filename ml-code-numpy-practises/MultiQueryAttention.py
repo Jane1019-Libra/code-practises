@@ -31,12 +31,12 @@ class MultiQueryAttention(nn.Modules):
         K = K.view(batch_size, seq_len, 1, self.d_k).transpose(1,2)
         V = V.view(batch_size, seq_len, 1, self.d_k).transpose(1,2)
 
-        score = torch.matmul(Q, K.transpose(-1,-2)) / torch.sqrt(self.d_k)
+        score = torch.matmul(Q, K.transpose(-1,-2)) / math.sqrt(self.d_k)
 
         if mask is not None:
             if len(mask.size()) == 2:
                 mask = mask.unsqueeze(0).unsqueeze(1)
-            score = score.masked_fill(mask == 0, float('-int'))
+            score = score.masked_fill(mask == 0, float('-inf'))
         
         attention_score = torch.matmul(F.softmax(score, dim = -1), V)
 
