@@ -26,7 +26,7 @@ class MultiHeadAttention(nn.Module):
         Q = Q.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1,2)
         K = K.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1,2)
         V = V.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1,2)
-        scores = torch.matmul(Q, K.transpose(-1,-2)) / torch.sqrt(self.d_k)
+        scores = torch.matmul(Q, K.transpose(-1,-2)) / math.sqrt(self.d_k)
 
         if mask is not None:
             if mask.dim() == 2:
