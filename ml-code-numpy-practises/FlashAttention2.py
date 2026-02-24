@@ -45,7 +45,6 @@ class FlashAttention2(nn.Module):
             for j in range(0, seq_len, block_size):
                 k_block = K[:,:, j : j + block_size]
                 v_block = V[:,:,j : j + block_size]
-
                 
                 attention_chunk = torch.matmul(q_block, k_block.transpose(-2,-1)) * self.scale
 
