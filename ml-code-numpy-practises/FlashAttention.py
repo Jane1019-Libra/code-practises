@@ -31,4 +31,44 @@ class FlashAttention(nn.Module):
         K = k.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1,2)
         V = v.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1,2)
 
+        out = torch.zeros_like(Q)
+
+        block_size = 64
+
+        device = x.device
+        max_scores = torch.full((batch_size, self.num_heads, seq_len, 1), float('-inf'))
+        softmax_sum = torch.zeros(batch_size, self.num_heads, seq_len, 1, device = device)
+
+        for i in range(0, seq_len, block_size):
+            k_block = K[:,:,i : i + block_size]
+            v_block = V[:,:,i : i + block_size]
+            for j in range(0, seq_len, block_size):
+                q_block = Q[:,:, j : j + block_size]
+
+                q_slice = slice(j, j + block_size)
+                attention_chunk = torch.matmul(q_block, k_block.transpose(-2,-1)) * self.scale
+
+                M_ij = attention_chunk.max(dim = -1, keepdim = True)[0]
+
+                L_j_old = max_scores[:,:, q_slice]
+                L_j_new = torch.maximum(L_j_old, M_ij)
+
+                exp_correction_factor = torch.exp(L_j_old - L_j_new)
+
+                exp_scores = torch.exp(attention_chunk - L_j_new)
+
+                softmax_sum_chunk = exp_scores.sum(dim = -1, keepdim=True)
+
+                softmax_sum_old = softmax_sum[:,:,q_slice]
+
+                softmax_sum[:,:,q_slice] = (softmax_sum_old * exp_correction_factor) + softmax_sum_chunk
+                max_scores[:,:,q_slice] = L_j_new
+
+                out[:,:, q_slice] *= exp_correction_factor
+                out[:,:,q_slice] += torch.matmul(exp_scores,v_block)
+
+                out[:,:,q_slice] /= softmax_sum[:,:,q_slice]
         
+        out = out.transpose(1,2).contiguous().view(batch_size, seq_len, self.embed_dim)
+
+        return self.out_proj(out)
