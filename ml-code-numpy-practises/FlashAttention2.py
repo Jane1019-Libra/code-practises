@@ -4,9 +4,9 @@ import torch.nn.functional as F
 import math
 
 
-class FlashAttention(nn.Module):
+class FlashAttention2(nn.Module):
     def __init__(self, embed_dim: int, num_heads: int):
-        super(FlashAttention, self).__init__()
+        super(FlashAttention2, self).__init__()
         assert embed_dim % num_heads == 0
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -40,12 +40,13 @@ class FlashAttention(nn.Module):
         softmax_sum = torch.zeros(batch_size, self.num_heads, seq_len, 1, device = device)
 
         for i in range(0, seq_len, block_size):
-            k_block = K[:,:,i : i + block_size]
-            v_block = V[:,:,i : i + block_size]
+            q_block = Q[:,:, i : i + block_size]
+            q_slice = slice(i, i + block_size)
             for j in range(0, seq_len, block_size):
-                q_block = Q[:,:, j : j + block_size]
+                k_block = K[:,:, j : j + block_size]
+                v_block = V[:,:,j : j + block_size]
 
-                q_slice = slice(j, j + block_size)
+                
                 attention_chunk = torch.matmul(q_block, k_block.transpose(-2,-1)) * self.scale
 
                 M_ij = attention_chunk.max(dim = -1, keepdim = True)[0]
@@ -62,14 +63,15 @@ class FlashAttention(nn.Module):
                 softmax_sum_old = softmax_sum[:,:,q_slice]
 
                 softmax_sum[:,:,q_slice] = (softmax_sum_old * exp_correction_factor) + softmax_sum_chunk
+                
                 max_scores[:,:,q_slice] = L_j_new
 
                 out[:,:, q_slice] *= exp_correction_factor
 
                 out[:,:,q_slice] += torch.matmul(exp_scores,v_block)
-
-                out[:,:,q_slice] /= softmax_sum[:,:,q_slice]
+            
+            out = out / softmax_sum
         
         out = out.transpose(1,2).contiguous().view(batch_size, seq_len, self.embed_dim)
 
-        return self.out_proj(out)
+        return self.o_proj(out)
